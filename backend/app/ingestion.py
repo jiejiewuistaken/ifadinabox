@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from pypdf import PdfReader
+from docx import Document
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,14 @@ def extract_text_from_file(path: Path) -> list[tuple[str, dict[str, Any]]]:
             text = page.extract_text() or ""
             out.append((_normalize_text(text), {"page": i + 1}))
         return out
+    if suffix == ".docx":
+        doc = Document(str(path))
+        parts: list[str] = []
+        for p in doc.paragraphs:
+            t = (p.text or "").strip()
+            if t:
+                parts.append(t)
+        return [(_normalize_text("\n\n".join(parts)), {})]
     if suffix in (".txt", ".md"):
         return [(_normalize_text(path.read_text(encoding="utf-8", errors="ignore")), {})]
     raise ValueError(f"Unsupported file type: {suffix}")

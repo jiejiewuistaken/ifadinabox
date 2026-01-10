@@ -4,7 +4,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .models import ReviewComment, ReviewResult, CheckboxStatus
+import json
+from pydantic import ValidationError
+
+from .llm import HFLLM
+from .models import CheckboxStatus, ReviewComment, ReviewResult
 
 
 @dataclass
@@ -38,72 +42,36 @@ class CountryDirectorWriter:
         title = project_inputs.get("title") or "Untitled COSOP"
         user_notes = (project_inputs.get("user_notes") or "").strip()
 
-        self.memory.add(
-            "user",
-            "Write COSOP draft using template. Inputs:\n"
-            f"- country={country}\n- title={title}\n- user_notes={user_notes[:5000]}\n"
-            f"- revision_notes={(revision_notes or '')[:3000]}\n",
-        )
-
         evidence_lines = []
         for i, ev in enumerate(evidence, start=1):
             loc = f"{ev.get('filename','')}"
             if ev.get("page"):
                 loc += f" p.{ev['page']}"
-            evidence_lines.append(f"[E{i}] ({loc}) {ev.get('text','')[:500].strip()}")
+            evidence_lines.append(f"[E{i}] ({loc}) {ev.get('text','')[:700].strip()}")
         evidence_annex = "\n\n".join(evidence_lines) if evidence_lines else "(No evidence retrieved.)"
 
-        country_context = (
-            f"This COSOP draft concerns **{country}**. "
-            "It is prepared as an MVP simulation and should be refined with country diagnostics "
-            "and stakeholder consultations.\n\n"
-            + (f"User-provided notes:\n\n{user_notes}\n" if user_notes else "")
+        prompt = (
+            "You must draft a COSOP in **Markdown**.\n"
+            "Follow the template headings exactly. Keep it coherent and professional.\n"
+            "Use inclusive, non-discriminatory language.\n"
+            "Use the evidence excerpts in the annex; you may quote them and reference [E1], [E2], ... where relevant.\n\n"
+            f"Country: {country}\n"
+            f"Title: {title}\n\n"
+            f"User notes:\n{user_notes}\n\n"
+            f"Revision notes (if any):\n{revision_notes or ''}\n\n"
+            "Template:\n"
+            f"{template_md}\n\n"
+            "Evidence excerpts:\n"
+            f"{evidence_annex}\n"
         )
 
-        lessons_learned = (
-            "Key lessons learned are synthesized from available documentation provided to the system "
-            "(e.g., CCR/CSPE references where available). Where gaps exist, the CDT should commission "
-            "background studies and validate findings through consultations.\n"
-        )
+        self.memory.add("user", prompt)
+        llm = HFLLM()
+        out = llm.chat(system=self.memory.system, messages=self.memory.messages, max_new_tokens=1800)
+        self.memory.add("assistant", out)
 
-        strategy_toc = (
-            "### Strategic objectives\n"
-            "- SO1: Improve inclusive rural livelihoods and incomes.\n"
-            "- SO2: Strengthen resilience to climate and market shocks.\n\n"
-            "### Theory of change (high level)\n"
-            "If investments expand access to services, finance, markets, and climate-smart practices, "
-            "then smallholders—especially women and youth—can increase productivity and incomes while "
-            "reducing vulnerability.\n"
-        )
-
-        implementation_arrangements = (
-            "Implementation will be coordinated by the Country Delivery Team (CDT) under the CD’s leadership. "
-            "The approach will align with IFAD procedures and emphasize partner coordination, learning, and "
-            "adaptive management.\n"
-        )
-
-        risks_mitigation = (
-            "- **Safeguards / inclusion risk**: Risk of exclusion of vulnerable groups. Mitigation: explicit targeting, "
-            "inclusive consultation, grievance redress.\n"
-            "- **Climate risk**: Increased climate variability. Mitigation: climate-smart investments, risk screening.\n"
-            "- **Institutional risk**: Limited capacity. Mitigation: capacity building and phased implementation.\n"
-        )
-
-        draft = template_md
-        draft = draft.replace("{{title}}", title)
-        draft = draft.replace("{{country_context}}", country_context)
-        draft = draft.replace("{{lessons_learned}}", lessons_learned)
-        draft = draft.replace("{{strategy_toc}}", strategy_toc)
-        draft = draft.replace("{{implementation_arrangements}}", implementation_arrangements)
-        draft = draft.replace("{{risks_mitigation}}", risks_mitigation)
-        draft = draft.replace("{{evidence_annex}}", evidence_annex)
-
-        if revision_notes:
-            draft += "\n\n---\n\n## Revision notes (from reviewer)\n\n" + revision_notes.strip() + "\n"
-
-        self.memory.add("assistant", "Draft produced (markdown).")
-        return draft
-
+        # Ensure we return markdown; if model returns extra leading text, just return as-is for MVP.
+        return out
 
 @dataclass
 class ODEReviewer:
@@ -114,7 +82,49 @@ class ODEReviewer:
     memory: AgentMemory
 
     def review(self, *, draft_md: str) -> ReviewResult:
-        self.memory.add("user", "Review the draft for quality and basic compliance. Return structured result.")
+        schema_hint = {
+            "passed": True,
+            "comments": [
+                {"severity": "major", "section": "Overall", "comment": "…", "suggestion": "…"},
+            ],
+            "checkboxes": [
+                {
+                    "id": "word_count",
+                    "label": "Word count meets MVP threshold (>= 800 words)",
+                    "status": "true",
+                    "rationale": "…",
+                    "evidence": [],
+                }
+            ],
+        }
+
+        prompt = (
+            "You are ODE. Review the COSOP draft.\n"
+            "Return ONLY valid JSON matching this schema shape (no markdown fences):\n"
+            f"{json.dumps(schema_hint, ensure_ascii=False)}\n\n"
+            "MVP checkbox requirements (use exactly these IDs):\n"
+            "- word_count: >= 800 words\n"
+            "- structure: includes core sections (context, objectives/ToC, implementation, risks)\n"
+            "- inclusion: inclusive / non-discriminatory language\n"
+            "- safeguards: mentions safeguards/inclusion risk mitigation\n"
+            "- evidence: includes evidence excerpts/citations\n\n"
+            "Draft:\n"
+            f"{draft_md}\n"
+        )
+        self.memory.add("user", prompt)
+        llm = HFLLM()
+        out = llm.chat(system=self.memory.system, messages=self.memory.messages, max_new_tokens=900)
+        self.memory.add("assistant", out)
+
+        try:
+            data = json.loads(out)
+            return ReviewResult.model_validate(data)
+        except (json.JSONDecodeError, ValidationError):
+            # Fallback to previous deterministic heuristic if JSON parsing fails
+            return self._heuristic_review(draft_md=draft_md)
+
+    def _heuristic_review(self, *, draft_md: str) -> ReviewResult:
+        self.memory.add("user", "Fallback heuristic review (JSON parse failed).")
 
         # Basic metrics
         text_only = re.sub(r"`[^`]*`", "", draft_md)
