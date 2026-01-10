@@ -17,11 +17,11 @@ No database is used in this MVP. Everything is stored as **files on disk** under
 
 ```bash
 pip3 install -r backend/requirements.txt
-export HF_API_TOKEN="YOUR_HUGGINGFACE_TOKEN"
+export API_KEY="YOUR_AZURE_OPENAI_KEY"
+export BASE_URL="https://YOUR-RESOURCE.openai.azure.com"
+export MODEL="YOUR_DEPLOYMENT_NAME"
 # optional:
-# export HF_MODEL="mistralai/Mistral-7B-Instruct-v0.3"
-# recommended (most reliable):
-# export HF_ENDPOINT_URL="https://<your-endpoint>.endpoints.huggingface.cloud"
+# export API_VERSION="2024-08-01-preview"
 python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
