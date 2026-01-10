@@ -20,6 +20,8 @@ pip3 install -r backend/requirements.txt
 export HF_API_TOKEN="YOUR_HUGGINGFACE_TOKEN"
 # optional:
 # export HF_MODEL="mistralai/Mistral-7B-Instruct-v0.3"
+# recommended (most reliable):
+# export HF_ENDPOINT_URL="https://<your-endpoint>.endpoints.huggingface.cloud"
 python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
