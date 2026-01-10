@@ -101,7 +101,7 @@ async def get_run(run_id: str) -> dict:
 
 
 @app.get("/api/runs/{run_id}/pdf")
-async def get_run_pdf(run_id: str) -> FileResponse:
+async def get_run_pdf(run_id: str, disposition: str = "inline") -> FileResponse:
     run_path = SETTINGS.runs_dir / run_id / "run.json"
     if not run_path.exists():
         raise HTTPException(status_code=404, detail="Run not found")
@@ -109,7 +109,11 @@ async def get_run_pdf(run_id: str) -> FileResponse:
     pdf_path = run.get("artifacts", {}).get("pdf")
     if not pdf_path:
         raise HTTPException(status_code=409, detail="PDF not ready")
-    return FileResponse(pdf_path, media_type="application/pdf", filename="cosop.pdf")
+    # IMPORTANT: for iframe preview we need inline disposition; for downloads use attachment.
+    if disposition not in ("inline", "attachment"):
+        raise HTTPException(status_code=400, detail="disposition must be inline|attachment")
+    headers = {"Content-Disposition": f'{disposition}; filename="cosop.pdf"'}
+    return FileResponse(pdf_path, media_type="application/pdf", headers=headers)
 
 
 @app.websocket("/ws/runs/{run_id}")

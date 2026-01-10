@@ -15,7 +15,7 @@ export default function PreviewPage() {
     refreshInterval: 1000,
   });
 
-  const pdfUrl = `${BACKEND_URL}/api/runs/${runId}/pdf`;
+  const pdfUrl = `${BACKEND_URL}/api/runs/${runId}/pdf?disposition=inline`;
   const review = run?.review;
 
   return (
@@ -33,7 +33,7 @@ export default function PreviewPage() {
             Back to Simulation
           </Link>
           <a
-            href={pdfUrl}
+            href={`${BACKEND_URL}/api/runs/${runId}/pdf?disposition=attachment`}
             style={{ padding: "8px 12px", border: "1px solid rgba(0,0,0,0.2)", borderRadius: 8 }}
             download="cosop.pdf"
           >

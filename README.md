@@ -17,8 +17,13 @@ No database is used in this MVP. Everything is stored as **files on disk** under
 
 ```bash
 pip3 install -r backend/requirements.txt
+export HF_API_TOKEN="YOUR_HUGGINGFACE_TOKEN"
+# optional:
+# export HF_MODEL="mistralai/Mistral-7B-Instruct-v0.3"
 python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
+
+You can also copy `backend/.env.example` → `backend/.env` and export variables from it in your shell.
 
 Backend will listen on `http://localhost:8000`.
 
@@ -71,6 +76,12 @@ The MVP knowledge base is a local TF‑IDF vector store per run:
 ## COSOP template
 The internal COSOP template used by the writer agent is:
 - `backend/assets/cosop_template.md`
+
+## Preloaded internal materials (chunked every run)
+Put any pre-existing reference materials here (PDF/TXT/MD/DOCX):
+- `backend/assets/internal_materials/`
+
+Every run ingests these files into the knowledge base **before** ingesting user uploads.
 
 ## Notes / limitations (by design for MVP)
 - Only **two agents** are implemented: **Country Director (writer)** and **ODE (reviewer)**.
