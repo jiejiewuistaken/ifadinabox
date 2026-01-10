@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from typing import Type, TypeVar
 
 from openai import AzureOpenAI
+from pydantic import BaseModel
 
 
 def _get_env_any(*names: str) -> str | None:
@@ -68,4 +70,46 @@ class AzureChatLLM:
             max_tokens=max_new_tokens,
         )
         return resp.choices[0].message.content or ""
+
+
+T = TypeVar("T", bound=BaseModel)
+
+
+class AzureStructuredLLM(AzureChatLLM):
+    """
+    Supports your exact pattern:
+      resp = client.chat.completions.create(..., response_format=SomePydanticModel)
+    If the SDK/runtime doesn't support it for your account/version, we fall back to JSON parsing.
+    """
+
+    def chat_structured(
+        self,
+        *,
+        system: str,
+        messages: list[dict[str, str]],
+        response_format: Type[T],
+        max_new_tokens: int = 1200,
+    ) -> T:
+        # Try direct `response_format=...` first (matches your snippet)
+        try:
+            resp = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[{"role": "system", "content": system}, *messages],
+                temperature=0.2,
+                max_tokens=max_new_tokens,
+                response_format=response_format,
+            )
+            text = resp.choices[0].message.content or ""
+            # Some SDKs still return JSON string content; validate into the model
+            return response_format.model_validate_json(text)
+        except Exception:
+            # Fallback: force JSON-only and parse/validate
+            resp = self.client.chat.completions.create(
+                model=self.deployment,
+                messages=[{"role": "system", "content": system + "\nReturn ONLY valid JSON."}, *messages],
+                temperature=0.2,
+                max_tokens=max_new_tokens,
+            )
+            text = resp.choices[0].message.content or ""
+            return response_format.model_validate_json(text)
 

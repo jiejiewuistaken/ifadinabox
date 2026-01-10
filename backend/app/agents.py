@@ -7,7 +7,7 @@ from typing import Any
 import json
 from pydantic import ValidationError
 
-from .llm import AzureChatLLM
+from .llm import AzureChatLLM, AzureStructuredLLM
 from .models import CheckboxStatus, ReviewComment, ReviewResult
 
 
@@ -112,15 +112,18 @@ class ODEReviewer:
             f"{draft_md}\n"
         )
         self.memory.add("user", prompt)
-        llm = AzureChatLLM()
-        out = llm.chat(system=self.memory.system, messages=self.memory.messages, max_new_tokens=900)
-        self.memory.add("assistant", out)
-
+        llm = AzureStructuredLLM()
         try:
-            data = json.loads(out)
-            return ReviewResult.model_validate(data)
-        except (json.JSONDecodeError, ValidationError):
-            # Fallback to previous deterministic heuristic if JSON parsing fails
+            result = llm.chat_structured(
+                system=self.memory.system,
+                messages=self.memory.messages,
+                response_format=ReviewResult,
+                max_new_tokens=900,
+            )
+            self.memory.add("assistant", result.model_dump_json())
+            return result
+        except (ValidationError, Exception):
+            # Fallback to previous deterministic heuristic if parsing fails
             return self._heuristic_review(draft_md=draft_md)
 
     def _heuristic_review(self, *, draft_md: str) -> ReviewResult:
