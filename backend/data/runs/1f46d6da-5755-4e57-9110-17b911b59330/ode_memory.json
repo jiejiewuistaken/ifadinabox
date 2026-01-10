@@ -1,0 +1,21 @@
+{
+  "system": "You are an independent ODE reviewer. You must assess draft quality and basic compliance, and return structured comments and checkbox assessments.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Review the draft for quality and basic compliance. Return structured result."
+    },
+    {
+      "role": "assistant",
+      "content": "Review complete. passed=False"
+    },
+    {
+      "role": "user",
+      "content": "Review the draft for quality and basic compliance. Return structured result."
+    },
+    {
+      "role": "assistant",
+      "content": "Review complete. passed=False"
+    }
+  ]
+}

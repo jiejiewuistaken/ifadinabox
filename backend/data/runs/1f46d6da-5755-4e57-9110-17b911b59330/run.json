@@ -1,0 +1,62 @@
+{
+  "run_id": "1f46d6da-5755-4e57-9110-17b911b59330",
+  "project_id": "smoke-project",
+  "status": "completed",
+  "round": 2,
+  "max_rounds": 2,
+  "error": null,
+  "artifacts": {
+    "draft_md": "/workspace/backend/data/runs/1f46d6da-5755-4e57-9110-17b911b59330/draft_round_2.md",
+    "pdf": "/workspace/backend/data/outputs/1f46d6da-5755-4e57-9110-17b911b59330/cosop.pdf",
+    "cd_memory": "/workspace/backend/data/runs/1f46d6da-5755-4e57-9110-17b911b59330/cd_memory.json",
+    "ode_memory": "/workspace/backend/data/runs/1f46d6da-5755-4e57-9110-17b911b59330/ode_memory.json"
+  },
+  "review": {
+    "passed": false,
+    "comments": [
+      {
+        "severity": "major",
+        "section": "Overall",
+        "comment": "Draft is likely under-developed (word_count=308).",
+        "suggestion": "Expand country context, lessons learned, and implementation arrangements with more evidence."
+      }
+    ],
+    "checkboxes": [
+      {
+        "id": "word_count",
+        "label": "Word count meets MVP threshold (>= 800 words)",
+        "status": "false",
+        "rationale": "Detected approximately 308 words.",
+        "evidence": []
+      },
+      {
+        "id": "structure",
+        "label": "Includes core COSOP sections (context, objectives/ToC, implementation, risks)",
+        "status": "true",
+        "rationale": "All required headings present.",
+        "evidence": []
+      },
+      {
+        "id": "inclusion",
+        "label": "Inclusive / non-discriminatory language (basic heuristic)",
+        "status": "true",
+        "rationale": "No flagged discriminatory terms found.",
+        "evidence": []
+      },
+      {
+        "id": "safeguards",
+        "label": "Mentions safeguards/inclusion risk mitigation (SECAP-relevant)",
+        "status": "true",
+        "rationale": "Detected safeguards language in risks/mitigation section.",
+        "evidence": []
+      },
+      {
+        "id": "evidence",
+        "label": "Provides evidence excerpts/citations from inputs (RAG annex)",
+        "status": "true",
+        "rationale": "Evidence annex includes at least one excerpt.",
+        "evidence": []
+      }
+    ]
+  }
+}

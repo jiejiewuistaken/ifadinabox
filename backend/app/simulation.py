@@ -88,22 +88,20 @@ async def run_simulation(*, run_id: str, project: dict[str, Any]) -> None:
         await _emit(run, "log", {"message": f"Vector store built at {vs_dir}."})
 
         # 2) Write + 3) Review loop
-        writer = CountryDirectorWriter(
-            memory=AgentMemory(
+        cd_memory = AgentMemory(
                 system=(
                     "You are the IFAD Country Director. You are responsible for coordinating COSOP drafting "
                     "using the provided COSOP template and evidence. Produce a coherent, structured draft."
                 )
             )
-        )
-        reviewer = ODEReviewer(
-            memory=AgentMemory(
+        ode_memory = AgentMemory(
                 system=(
                     "You are an independent ODE reviewer. You must assess draft quality and basic compliance, "
                     "and return structured comments and checkbox assessments."
                 )
             )
-        )
+        writer = CountryDirectorWriter(memory=cd_memory)
+        reviewer = ODEReviewer(memory=ode_memory)
 
         template_md = template_path.read_text(encoding="utf-8")
         revision_notes: str | None = None
@@ -169,6 +167,17 @@ async def run_simulation(*, run_id: str, project: dict[str, Any]) -> None:
 
         run.artifacts["draft_md"] = str(latest_md_path)
         run.artifacts["pdf"] = str(pdf_path)
+        run.artifacts["cd_memory"] = str(_run_dir(run_id) / "cd_memory.json")
+        run.artifacts["ode_memory"] = str(_run_dir(run_id) / "ode_memory.json")
+
+        await write_json(
+            _run_dir(run_id) / "cd_memory.json",
+            {"system": cd_memory.system, "messages": cd_memory.messages},
+        )
+        await write_json(
+            _run_dir(run_id) / "ode_memory.json",
+            {"system": ode_memory.system, "messages": ode_memory.messages},
+        )
 
         run.status = "completed"
         await _save_run_status(run)
