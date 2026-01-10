@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from uuid import uuid4
 
@@ -38,7 +39,18 @@ async def _startup() -> None:
     backend_dir = Path(__file__).resolve().parents[1]
     dotenv_path = backend_dir / ".env"
     if dotenv_path.exists():
-        load_dotenv(dotenv_path=dotenv_path, override=False)
+        # override=True so a previously-exported empty API_KEY doesn't “win”.
+        load_dotenv(dotenv_path=dotenv_path, override=True)
+        # minimal sanity log (does not print secrets)
+        api_key_present = bool((os.getenv("API_KEY") or os.getenv("api_key") or "").strip())
+        base_url_present = bool((os.getenv("BASE_URL") or os.getenv("base_url") or "").strip())
+        model_present = bool((os.getenv("MODEL") or os.getenv("model") or "").strip())
+        print(
+            f"[startup] loaded {dotenv_path} "
+            f"(API_KEY={'yes' if api_key_present else 'no'}, "
+            f"BASE_URL={'yes' if base_url_present else 'no'}, "
+            f"MODEL={'yes' if model_present else 'no'})"
+        )
 
     SETTINGS.data_dir.mkdir(parents=True, exist_ok=True)
     SETTINGS.projects_dir.mkdir(parents=True, exist_ok=True)
