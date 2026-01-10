@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from openai import AzureOpenAI
 
 
+def _get_env_any(*names: str) -> str | None:
+    for n in names:
+        v = os.getenv(n)
+        if v is not None:
+            return v
+    return None
+
+
 @dataclass(frozen=True)
 class AzureConfig:
     """
@@ -25,15 +33,24 @@ class AzureConfig:
 class AzureChatLLM:
     def __init__(self, config: AzureConfig | None = None) -> None:
         self.config = config or AzureConfig()
-        api_key = os.getenv(self.config.api_key_env)
-        endpoint = os.getenv(self.config.base_url_env)
-        deployment = os.getenv(self.config.model_env)
+        # Be forgiving: accept both uppercase and lowercase env var names.
+        api_key = _get_env_any(self.config.api_key_env, self.config.api_key_env.lower())
+        endpoint = _get_env_any(self.config.base_url_env, self.config.base_url_env.lower())
+        deployment = _get_env_any(self.config.model_env, self.config.model_env.lower())
+
+        # Treat empty string as missing (common when .env has api_key="").
         if not api_key:
-            raise RuntimeError(f"Missing env var {self.config.api_key_env} for Azure OpenAI api_key.")
+            raise RuntimeError(
+                f"Missing/empty Azure OpenAI api_key. Set {self.config.api_key_env}=... (or api_key=...) in backend/.env."
+            )
         if not endpoint:
-            raise RuntimeError(f"Missing env var {self.config.base_url_env} for Azure OpenAI azure_endpoint.")
+            raise RuntimeError(
+                f"Missing/empty Azure OpenAI azure_endpoint. Set {self.config.base_url_env}=... (or base_url=...) in backend/.env."
+            )
         if not deployment:
-            raise RuntimeError(f"Missing env var {self.config.model_env} for Azure OpenAI deployment name.")
+            raise RuntimeError(
+                f"Missing/empty Azure OpenAI deployment name. Set {self.config.model_env}=... (or model=...) in backend/.env."
+            )
 
         self.deployment = deployment
         self.client = AzureOpenAI(
