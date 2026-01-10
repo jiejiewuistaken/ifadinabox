@@ -25,7 +25,7 @@ export MODEL="YOUR_DEPLOYMENT_NAME"
 python3 -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-You can also copy `backend/.env.example` → `backend/.env` and export variables from it in your shell.
+Copy `backend/.env.example` → `backend/.env` and fill values. The backend will auto-load `backend/.env` on startup.
 
 Backend will listen on `http://localhost:8000`.
 

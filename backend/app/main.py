@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from dotenv import load_dotenv
 
 from .config import SETTINGS
 from .events import EVENT_BUS
@@ -32,6 +33,13 @@ def _project_path(project_id: str) -> Path:
 
 @app.on_event("startup")
 async def _startup() -> None:
+    # Optional convenience: load env vars from backend/.env if present.
+    # (We do not load .env.example; copy it to .env.)
+    backend_dir = Path(__file__).resolve().parents[1]
+    dotenv_path = backend_dir / ".env"
+    if dotenv_path.exists():
+        load_dotenv(dotenv_path=dotenv_path, override=False)
+
     SETTINGS.data_dir.mkdir(parents=True, exist_ok=True)
     SETTINGS.projects_dir.mkdir(parents=True, exist_ok=True)
     SETTINGS.uploads_dir.mkdir(parents=True, exist_ok=True)
