@@ -7,7 +7,7 @@ from typing import Any
 import json
 from pydantic import ValidationError
 
-from .llm import HFLLM
+from .llm import AzureChatLLM
 from .models import CheckboxStatus, ReviewComment, ReviewResult
 
 
@@ -66,7 +66,7 @@ class CountryDirectorWriter:
         )
 
         self.memory.add("user", prompt)
-        llm = HFLLM()
+        llm = AzureChatLLM()
         out = llm.chat(system=self.memory.system, messages=self.memory.messages, max_new_tokens=1800)
         self.memory.add("assistant", out)
 
@@ -112,7 +112,7 @@ class ODEReviewer:
             f"{draft_md}\n"
         )
         self.memory.add("user", prompt)
-        llm = HFLLM()
+        llm = AzureChatLLM()
         out = llm.chat(system=self.memory.system, messages=self.memory.messages, max_new_tokens=900)
         self.memory.add("assistant", out)
 
