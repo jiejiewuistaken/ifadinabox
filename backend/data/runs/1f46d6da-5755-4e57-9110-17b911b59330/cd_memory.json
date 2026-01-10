@@ -1,0 +1,21 @@
+{
+  "system": "You are the IFAD Country Director. You are responsible for coordinating COSOP drafting using the provided COSOP template and evidence. Produce a coherent, structured draft.",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Write COSOP draft using template. Inputs:\n- country=Testland\n- title=Test COSOP\n- user_notes=Notes about inclusivity and climate.\n- revision_notes=\n"
+    },
+    {
+      "role": "assistant",
+      "content": "Draft produced (markdown)."
+    },
+    {
+      "role": "user",
+      "content": "Write COSOP draft using template. Inputs:\n- country=Testland\n- title=Test COSOP\n- user_notes=Notes about inclusivity and climate.\n- revision_notes=- [major] Overall: Draft is likely under-developed (word_count=283). Suggestion: Expand country context, lessons learned, and implementation arrangements with more evidence.\n"
+    },
+    {
+      "role": "assistant",
+      "content": "Draft produced (markdown)."
+    }
+  ]
+}

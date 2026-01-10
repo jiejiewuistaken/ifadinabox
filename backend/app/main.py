@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -95,15 +95,20 @@ async def start_run(project_id: str) -> RunCreateResponse:
 @app.get("/api/runs/{run_id}")
 async def get_run(run_id: str) -> dict:
     run_path = SETTINGS.runs_dir / run_id / "run.json"
+    if not run_path.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
     return await read_json(run_path)
 
 
 @app.get("/api/runs/{run_id}/pdf")
 async def get_run_pdf(run_id: str) -> FileResponse:
-    run = await read_json(SETTINGS.runs_dir / run_id / "run.json")
+    run_path = SETTINGS.runs_dir / run_id / "run.json"
+    if not run_path.exists():
+        raise HTTPException(status_code=404, detail="Run not found")
+    run = await read_json(run_path)
     pdf_path = run.get("artifacts", {}).get("pdf")
     if not pdf_path:
-        raise FileNotFoundError("PDF not ready")
+        raise HTTPException(status_code=409, detail="PDF not ready")
     return FileResponse(pdf_path, media_type="application/pdf", filename="cosop.pdf")
 
 
