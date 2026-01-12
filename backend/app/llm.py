@@ -6,6 +6,8 @@ from typing import Type, TypeVar
 
 from openai import AzureOpenAI
 from pydantic import BaseModel
+from dotenv import load_dotenv
+from pathlib import Path
 
 
 def _get_env_any(*names: str) -> str | None:
@@ -35,10 +37,22 @@ class AzureConfig:
 class AzureChatLLM:
     def __init__(self, config: AzureConfig | None = None) -> None:
         self.config = config or AzureConfig()
-        # Be forgiving: accept both uppercase and lowercase env var names.
-        api_key = _get_env_any(self.config.api_key_env, self.config.api_key_env.lower())
-        endpoint = _get_env_any(self.config.base_url_env, self.config.base_url_env.lower())
-        deployment = _get_env_any(self.config.model_env, self.config.model_env.lower())
+        def read_env() -> tuple[str | None, str | None, str | None]:
+            # Be forgiving: accept both uppercase and lowercase env var names.
+            api_key_ = _get_env_any(self.config.api_key_env, self.config.api_key_env.lower())
+            endpoint_ = _get_env_any(self.config.base_url_env, self.config.base_url_env.lower())
+            deployment_ = _get_env_any(self.config.model_env, self.config.model_env.lower())
+            return api_key_, endpoint_, deployment_
+
+        api_key, endpoint, deployment = read_env()
+
+        # If env isn't loaded yet (common), auto-load backend/.env and retry.
+        if not (api_key and endpoint and deployment):
+            backend_dir = Path(__file__).resolve().parents[1]  # backend/
+            dotenv_path = backend_dir / ".env"
+            if dotenv_path.exists():
+                load_dotenv(dotenv_path=dotenv_path, override=True)
+                api_key, endpoint, deployment = read_env()
 
         # Treat empty string as missing (common when .env has api_key="").
         if not api_key:
