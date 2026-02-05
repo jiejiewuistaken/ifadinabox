@@ -2,8 +2,8 @@
 
 End-to-end flow:
 - **Input page**: upload files + free-text inputs
-- **Simulation page**: multi-agent loop (CD, CDT, Government, REN, ODE) with realtime logs + graph
-- **Preview page**: PDF carousel (top candidates) + ODE checklist
+- **Simulation page**: multi-agent loop (CD, CDT, Government, OSC, QAG, VP, President, EB) with realtime logs + graph
+- **Preview page**: PDF carousel (top candidates) + QAG checklist
 
 No database is used. Everything is stored as **files on disk** under `backend/data/`.
 
@@ -58,7 +58,7 @@ Frontend will listen on `http://localhost:3000`.
 **Outputs**
 - COSOP/PCN/PDR draft(s) in Markdown
 - Top candidate PDFs (default: up to 5)
-- ODE and REN review results + evaluation metrics
+- OSC and QAG review results + evaluation metrics
 - Completion phase forecast (on_track/watchlist/at_risk)
 
 **Optional simulation config (via project inputs)**
@@ -66,6 +66,14 @@ Frontend will listen on `http://localhost:3000`.
 - `num_simulations`: number of candidate runs (cap 100)
 - `max_rounds`: revision rounds per candidate (cap 6)
 - `top_candidates`: number of PDFs to keep (cap 5)
+
+## COSOP pipeline stages (simulated)
+1. COSOP pipeline (CD + Government + CDT)
+2. OSC review
+3. QAG post-OSC desk review
+4. VP endorsement
+5. President approval
+6. EB consultation / presentation
 
 ## Where files are stored (important)
 
@@ -81,7 +89,8 @@ Everything lives under `backend/data/`:
   - `backend/data/runs/<run_id>/events.jsonl`
 - **Agent prompt memory (top candidate)**
   - `backend/data/runs/<run_id>/cd_memory.json`
-  - `backend/data/runs/<run_id>/ode_memory.json`
+  - `backend/data/runs/<run_id>/osc_memory.json`
+  - `backend/data/runs/<run_id>/qag_memory.json`
 - **Candidate drafts**
   - `backend/data/runs/<run_id>/candidates/<candidate_id>/draft_round_<n>.md`
 - **Generated PDFs**
@@ -116,9 +125,9 @@ Add or replace files here for each stakeholder.
 Access scopes (default):
 - `public`: all agents
 - `government`: gov_mof, gov_moa, cd, cdt
-- `ifad`: cd, cdt, ren, ode
+- `ifad`: cd, cdt, osc, qag, vp, president, eb
 - `technical`: cdt, cd
-- `compliance`: ren, ode
+- `compliance`: osc, qag
 - `project`: all agents (user uploads)
 
 ## Agent prompts

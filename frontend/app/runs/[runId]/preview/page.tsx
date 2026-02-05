@@ -163,7 +163,7 @@ export default function PreviewPage() {
                 height: "fit-content",
               }}
             >
-              <div style={{ fontWeight: 800 }}>ODE review</div>
+              <div style={{ fontWeight: 800 }}>QAG review</div>
               <div style={{ marginTop: 6, opacity: 0.8 }}>
                 Review not ready yet. Current status: {run?.status ?? "loading"}.
               </div>

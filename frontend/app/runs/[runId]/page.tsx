@@ -31,11 +31,27 @@ export default function RunPage() {
   const [logs, setLogs] = useState<string[]>([]);
   const [nodesState, setNodesState] = useState<Record<string, { label: string; status: string }>>({
     cd: { label: "Country Director", status: "idle" },
-    ode: { label: "ODE Reviewer", status: "idle" },
+    cdt_econ: { label: "CDT Economist", status: "idle" },
+    cdt_tech: { label: "CDT Technical", status: "idle" },
+    gov_mof: { label: "Ministry of Finance", status: "idle" },
+    gov_moa: { label: "Ministry of Agriculture", status: "idle" },
+    osc: { label: "OSC Review", status: "idle" },
+    qag: { label: "QAG Desk Review", status: "idle" },
+    vp: { label: "VP Endorsement", status: "idle" },
+    president: { label: "President Approval", status: "idle" },
+    eb: { label: "EB Consultation", status: "idle" },
   });
 
   const [edgesState, setEdgesState] = useState<{ source: string; target: string; label?: string }[]>([
-    { source: "cd", target: "ode", label: "review" },
+    { source: "gov_mof", target: "cd", label: "priorities" },
+    { source: "gov_moa", target: "cd", label: "priorities" },
+    { source: "cdt_econ", target: "cd", label: "technical review" },
+    { source: "cdt_tech", target: "cd", label: "technical review" },
+    { source: "cd", target: "osc", label: "OSC review" },
+    { source: "osc", target: "qag", label: "QAG desk review" },
+    { source: "qag", target: "vp", label: "endorsement" },
+    { source: "vp", target: "president", label: "approval" },
+    { source: "president", target: "eb", label: "consultation" },
   ]);
 
   useRunEvents(runId, (ev: RunEvent) => {

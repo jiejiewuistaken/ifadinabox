@@ -212,7 +212,7 @@ class CDTAdvisor(LLMAgent):
 @dataclass
 class RENReviewer:
     """
-    Quality and compliance reviewer.
+    OSC reviewer: quality and compliance review.
     """
 
     memory: AgentMemory
@@ -235,7 +235,7 @@ class RENReviewer:
         }
 
         prompt = (
-            "You are REN. Review the COSOP draft for quality, compliance, and results orientation.\n"
+            "You are OSC. Review the COSOP draft for quality, compliance, and results orientation.\n"
             "Return ONLY valid JSON matching this schema shape (no markdown fences):\n"
             f"{json.dumps(schema_hint, ensure_ascii=False)}\n\n"
             "Checkbox IDs to use:\n"
@@ -259,7 +259,7 @@ class RENReviewer:
             return self._heuristic_review(draft_md=draft_md)
 
     def _heuristic_review(self, *, draft_md: str) -> ReviewResult:
-        self.memory.add_message("user", "Fallback heuristic REN review (JSON parse failed).")
+        self.memory.add_message("user", "Fallback heuristic OSC review (JSON parse failed).")
 
         comments: list[ReviewComment] = []
         has_results = "theory of change" in draft_md.lower() or "results" in draft_md.lower()
@@ -343,7 +343,7 @@ class RENReviewer:
 @dataclass
 class ODEReviewer:
     """
-    ODE reviewer: deterministic checks + comments + 5 checkboxes.
+    QAG desk reviewer: deterministic checks + comments + 5 checkboxes.
     """
 
     memory: AgentMemory
@@ -366,7 +366,7 @@ class ODEReviewer:
         }
 
         prompt = (
-            "You are ODE. Review the COSOP draft.\n"
+            "You are QAG. Review the COSOP draft.\n"
             "Return ONLY valid JSON matching this schema shape (no markdown fences):\n"
             f"{json.dumps(schema_hint, ensure_ascii=False)}\n\n"
             "Checkbox requirements (use exactly these IDs):\n"

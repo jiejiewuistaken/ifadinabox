@@ -24,6 +24,11 @@ from .storage import write_json, append_jsonl, read_json
 from .vector_store import LocalTfidfVectorStore
 
 
+VP_SCORE_THRESHOLD = 3.2
+PRESIDENT_SCORE_THRESHOLD = 3.4
+MIN_REVIEW_SCORE = 3.0
+
+
 @dataclass(frozen=True)
 class KnowledgeSource:
     label: str
@@ -84,12 +89,23 @@ def _agent_profiles() -> dict[str, AgentProfile]:
             "You represent the Ministry of Agriculture. Emphasize rural development priorities, food systems, "
             "youth and employment, and institutional capacity."
         ),
-        "ren": (
-            "You are REN. Provide quality and compliance review focused on results chain, safeguards, "
-            "policy alignment, and implementation capacity."
+        "osc": (
+            "You are OSC. Conduct the COSOP review phase, focusing on policy alignment, results chain "
+            "coherence, safeguards, and implementation readiness."
         ),
-        "ode": (
-            "You are ODE. Provide an independent review, focusing on quality, compliance, and evidence use."
+        "qag": (
+            "You are QAG. Conduct the post-OSC desk review, focusing on evidence quality, compliance risks, "
+            "and decision readiness."
+        ),
+        "vp": (
+            "You are the Vice President. Provide endorsement based on strategic fit, risk appetite, and "
+            "portfolio balance."
+        ),
+        "president": (
+            "You are the IFAD President. Provide final approval based on strategic importance and compliance."
+        ),
+        "eb": (
+            "You are the Executive Board Secretariat. Confirm readiness for consultation/presentation."
         ),
     }
 
@@ -129,19 +145,40 @@ def _agent_profiles() -> dict[str, AgentProfile]:
             system_prompt=_load_prompt("gov_moa", defaults["gov_moa"]),
             allowed_scopes=("public", "government", "project"),
         ),
-        "ren": AgentProfile(
-            agent_id="ren",
-            label="REN Reviewer",
-            responsibilities=["Quality control", "Compliance", "Results chain"],
-            system_prompt=_load_prompt("ren", defaults["ren"]),
+        "osc": AgentProfile(
+            agent_id="osc",
+            label="OSC Review",
+            responsibilities=["Policy alignment", "Results chain", "Safeguards compliance"],
+            system_prompt=_load_prompt("osc", defaults["osc"]),
             allowed_scopes=("public", "ifad", "compliance", "project"),
         ),
-        "ode": AgentProfile(
-            agent_id="ode",
-            label="ODE Reviewer",
-            responsibilities=["Independent review", "Evidence quality", "Risk mitigation"],
-            system_prompt=_load_prompt("ode", defaults["ode"]),
+        "qag": AgentProfile(
+            agent_id="qag",
+            label="QAG Desk Review",
+            responsibilities=["Quality assurance", "Evidence scrutiny", "Risk compliance"],
+            system_prompt=_load_prompt("qag", defaults["qag"]),
             allowed_scopes=("public", "ifad", "compliance", "project"),
+        ),
+        "vp": AgentProfile(
+            agent_id="vp",
+            label="VP Endorsement",
+            responsibilities=["Strategic fit", "Risk appetite", "Portfolio balance"],
+            system_prompt=_load_prompt("vp", defaults["vp"]),
+            allowed_scopes=("public", "ifad", "project"),
+        ),
+        "president": AgentProfile(
+            agent_id="president",
+            label="President Approval",
+            responsibilities=["Final approval", "Strategic importance", "Compliance readiness"],
+            system_prompt=_load_prompt("president", defaults["president"]),
+            allowed_scopes=("public", "ifad", "project"),
+        ),
+        "eb": AgentProfile(
+            agent_id="eb",
+            label="EB Consultation",
+            responsibilities=["Board readiness", "Consultation preparation"],
+            system_prompt=_load_prompt("eb", defaults["eb"]),
+            allowed_scopes=("public", "ifad", "project"),
         ),
     }
 
@@ -196,8 +233,11 @@ def _build_kb_sources() -> list[KnowledgeSource]:
         "cd": ["ifad"],
         "cdt_econ": ["ifad", "technical"],
         "cdt_tech": ["technical"],
-        "ren": ["compliance"],
-        "ode": ["compliance"],
+        "osc": ["compliance"],
+        "qag": ["compliance"],
+        "vp": ["ifad"],
+        "president": ["ifad"],
+        "eb": ["public"],
     }
     for folder, scopes in kb_scopes.items():
         dir_path = SETTINGS.agent_kb_dir / folder
@@ -239,7 +279,7 @@ def _score_similarity(
     return score, rationale, evidence
 
 
-def _build_metrics(vs: LocalTfidfVectorStore, *, draft_md: str, ode_review: ReviewResult) -> list[ReviewMetric]:
+def _build_metrics(vs: LocalTfidfVectorStore, *, draft_md: str, qag_review: ReviewResult) -> list[ReviewMetric]:
     metrics: list[ReviewMetric] = []
 
     score, rationale, evidence = _score_similarity(vs, draft_md=draft_md, scopes=["ifad"])
@@ -275,16 +315,16 @@ def _build_metrics(vs: LocalTfidfVectorStore, *, draft_md: str, ode_review: Revi
         )
     )
 
-    blockers = [c for c in ode_review.comments if c.severity == "blocker"]
-    if ode_review.passed:
+    blockers = [c for c in qag_review.comments if c.severity == "blocker"]
+    if qag_review.passed:
         score = 4.5
-        rationale = "ODE review passed; no blocker issues."
+        rationale = "QAG desk review passed; no blocker issues."
     elif blockers:
         score = 1.5
-        rationale = f"ODE review flagged blockers ({len(blockers)})."
+        rationale = f"QAG desk review flagged blockers ({len(blockers)})."
     else:
         score = 2.5
-        rationale = "ODE review identified gaps but no blockers."
+        rationale = "QAG desk review identified gaps but no blockers."
     metrics.append(
         ReviewMetric(
             id="compliance_risk",
@@ -337,6 +377,11 @@ def _build_forecast(*, score: float, passed: bool, blockers: int) -> ForecastRes
     return ForecastResult(phase=phase, confidence=confidence, rationale=rationale)
 
 
+def _stage_note(stage: str, *, passed: bool, rationale: str) -> str:
+    verdict = "approved" if passed else "rejected"
+    return f"{stage} {verdict}: {rationale}"
+
+
 def _format_revision_notes(reviews: Iterable[ReviewResult]) -> str:
     notes: list[str] = []
     for review in reviews:
@@ -373,16 +418,19 @@ async def _run_candidate(
     mem_cdt_tech = _init_memory(profiles["cdt_tech"], inputs)
     mem_gov_mof = _init_memory(profiles["gov_mof"], inputs)
     mem_gov_moa = _init_memory(profiles["gov_moa"], inputs)
-    mem_ren = _init_memory(profiles["ren"], inputs)
-    mem_ode = _init_memory(profiles["ode"], inputs)
+    mem_osc = _init_memory(profiles["osc"], inputs)
+    mem_qag = _init_memory(profiles["qag"], inputs)
+    mem_vp = _init_memory(profiles["vp"], inputs)
+    mem_president = _init_memory(profiles["president"], inputs)
+    mem_eb = _init_memory(profiles["eb"], inputs)
 
     cd_writer = CountryDirectorWriter(profile=profiles["cd"], memory=mem_cd)
     cdt_econ = CDTAdvisor(profile=profiles["cdt_econ"], memory=mem_cdt_econ)
     cdt_tech = CDTAdvisor(profile=profiles["cdt_tech"], memory=mem_cdt_tech)
     gov_mof = GovernmentAdvisor(profile=profiles["gov_mof"], memory=mem_gov_mof)
     gov_moa = GovernmentAdvisor(profile=profiles["gov_moa"], memory=mem_gov_moa)
-    ren = RENReviewer(memory=mem_ren)
-    ode = ODEReviewer(memory=mem_ode)
+    osc = RENReviewer(memory=mem_osc)
+    qag = ODEReviewer(memory=mem_qag)
 
     revision_notes: str | None = None
     gov_notes: str | None = None
@@ -483,26 +531,114 @@ async def _run_candidate(
         draft_path.write_text(draft_md, encoding="utf-8")
         await _emit(run, "draft_created", {"path": str(draft_path), "candidate_id": candidate_id})
 
-        # Review
+        # Review (OSC -> QAG)
         run.status = "reviewing"
         await _save_run_status(run)
         await _emit(run, "run_status", {"status": run.status, "round": r, "candidate_id": candidate_id})
-        await _emit(run, "graph_update", {"node_status": {"cd": "idle", "ren": "reviewing", "ode": "reviewing"}})
-        await _log(run, node="review", message="REN and ODE reviewing draft", extra={"round": r, "candidate_id": candidate_id})
+        await _emit(run, "graph_update", {"node_status": {"cd": "idle", "osc": "reviewing", "qag": "idle"}})
+        await _log(run, node="review", message="OSC reviewing draft", extra={"round": r, "candidate_id": candidate_id})
 
-        ren_review = ren.review(draft_md=draft_md)
-        ode_review = ode.review(draft_md=draft_md)
-        metrics = _build_metrics(vs, draft_md=draft_md, ode_review=ode_review)
-        review_with_metrics = ode_review.model_copy(update={"metrics": metrics})
+        osc_review = osc.review(draft_md=draft_md)
+        osc_pass = osc_review.passed
+        await _emit(run, "graph_update", {"node_status": {"osc": "passed" if osc_pass else "rework"}})
+
+        await _emit(run, "graph_update", {"node_status": {"qag": "reviewing"}})
+        await _log(run, node="review", message="QAG desk review", extra={"round": r, "candidate_id": candidate_id})
+        qag_review = qag.review(draft_md=draft_md)
+        qag_pass = osc_pass and qag_review.passed
+        await _emit(run, "graph_update", {"node_status": {"qag": "passed" if qag_pass else "rework"}})
+
+        metrics = _build_metrics(vs, draft_md=draft_md, qag_review=qag_review)
+        review_with_metrics = qag_review.model_copy(update={"metrics": metrics})
         overall = _overall_score(metrics)
-        blockers = len([c for c in ode_review.comments if c.severity == "blocker"])
-        passed = ren_review.passed and ode_review.passed and overall >= 3.0
+        blockers = len([c for c in qag_review.comments if c.severity == "blocker"])
+
+        review_ready = qag_pass and overall >= MIN_REVIEW_SCORE
+        vp_pass = review_ready and overall >= VP_SCORE_THRESHOLD
+        president_pass = vp_pass and overall >= PRESIDENT_SCORE_THRESHOLD
+        eb_pass = president_pass
+
+        stage_gates = {
+            "osc_review": osc_pass,
+            "qag_review": qag_pass,
+            "vp_endorsement": vp_pass,
+            "president_approval": president_pass,
+            "eb_consultation": eb_pass,
+        }
+
+        stage_notes = {
+            "osc_review": _stage_note(
+                "OSC review",
+                passed=osc_pass,
+                rationale="OSC review passed." if osc_pass else "OSC requested revisions.",
+            ),
+            "qag_review": _stage_note(
+                "QAG desk review",
+                passed=qag_pass,
+                rationale="QAG review passed." if qag_pass else "QAG requested revisions or OSC not passed.",
+            ),
+        }
+
+        if qag_pass:
+            await _emit(run, "graph_update", {"node_status": {"vp": "endorsing"}})
+            vp_note = _stage_note(
+                "VP endorsement",
+                passed=vp_pass,
+                rationale=f"Overall score {overall:.2f} (threshold {VP_SCORE_THRESHOLD:.2f}).",
+            )
+            stage_notes["vp_endorsement"] = vp_note
+            mem_vp.add_short_term(vp_note)
+            await _emit(run, "graph_update", {"node_status": {"vp": "endorsed" if vp_pass else "rejected"}})
+
+            await _emit(run, "graph_update", {"node_status": {"president": "approving"}})
+            president_note = _stage_note(
+                "President approval",
+                passed=president_pass,
+                rationale=f"Overall score {overall:.2f} (threshold {PRESIDENT_SCORE_THRESHOLD:.2f}).",
+            )
+            stage_notes["president_approval"] = president_note
+            mem_president.add_short_term(president_note)
+            await _emit(run, "graph_update", {"node_status": {"president": "approved" if president_pass else "rejected"}})
+
+            await _emit(run, "graph_update", {"node_status": {"eb": "consulting"}})
+            eb_note = _stage_note(
+                "EB consultation",
+                passed=eb_pass,
+                rationale="Ready for consultation/presentation." if eb_pass else "Not ready for EB consultation.",
+            )
+            stage_notes["eb_consultation"] = eb_note
+            mem_eb.add_short_term(eb_note)
+            await _emit(run, "graph_update", {"node_status": {"eb": "completed" if eb_pass else "blocked"}})
+        else:
+            stage_notes["vp_endorsement"] = _stage_note(
+                "VP endorsement",
+                passed=False,
+                rationale="Skipped because OSC/QAG did not pass.",
+            )
+            stage_notes["president_approval"] = _stage_note(
+                "President approval",
+                passed=False,
+                rationale="Skipped because OSC/QAG did not pass.",
+            )
+            stage_notes["eb_consultation"] = _stage_note(
+                "EB consultation",
+                passed=False,
+                rationale="Skipped because OSC/QAG did not pass.",
+            )
+            await _emit(run, "graph_update", {"node_status": {"vp": "blocked", "president": "blocked", "eb": "blocked"}})
+
+        passed = eb_pass
         forecast = _build_forecast(score=overall, passed=passed, blockers=blockers)
 
         await _emit(
             run,
             "review_result",
-            {"candidate_id": candidate_id, "ode_review": review_with_metrics.model_dump(), "ren_review": ren_review.model_dump()},
+            {
+                "candidate_id": candidate_id,
+                "osc_review": osc_review.model_dump(),
+                "qag_review": review_with_metrics.model_dump(),
+                "stage_gates": stage_gates,
+            },
         )
 
         if passed or r >= run.max_rounds:
@@ -510,8 +646,11 @@ async def _run_candidate(
             memory_dir = candidate_dir / "memory"
             memory_dir.mkdir(parents=True, exist_ok=True)
             await write_json(memory_dir / "cd.json", mem_cd.snapshot())
-            await write_json(memory_dir / "ode.json", mem_ode.snapshot())
-            await write_json(memory_dir / "ren.json", mem_ren.snapshot())
+            await write_json(memory_dir / "osc.json", mem_osc.snapshot())
+            await write_json(memory_dir / "qag.json", mem_qag.snapshot())
+            await write_json(memory_dir / "vp.json", mem_vp.snapshot())
+            await write_json(memory_dir / "president.json", mem_president.snapshot())
+            await write_json(memory_dir / "eb.json", mem_eb.snapshot())
             await write_json(memory_dir / "gov_mof.json", mem_gov_mof.snapshot())
             await write_json(memory_dir / "gov_moa.json", mem_gov_moa.snapshot())
             await write_json(memory_dir / "cdt_econ.json", mem_cdt_econ.snapshot())
@@ -524,12 +663,16 @@ async def _run_candidate(
                 round=r,
                 draft_path=str(draft_path),
                 review=review_with_metrics,
-                ren_review=ren_review,
-                ode_review=ode_review,
+                ren_review=osc_review,
+                ode_review=qag_review,
+                osc_review=osc_review,
+                qag_review=qag_review,
+                stage_gates=stage_gates,
+                stage_notes=stage_notes,
                 forecast=forecast,
             )
 
-        revision_notes = _format_revision_notes([ren_review, ode_review])
+        revision_notes = _format_revision_notes([osc_review, qag_review])
         await _log(
             run,
             node="orchestrator",
@@ -570,16 +713,22 @@ async def run_simulation(*, run_id: str, project: dict[str, Any]) -> None:
                     {"id": "cdt_tech", "label": profiles["cdt_tech"].label, "status": "idle"},
                     {"id": "gov_mof", "label": profiles["gov_mof"].label, "status": "idle"},
                     {"id": "gov_moa", "label": profiles["gov_moa"].label, "status": "idle"},
-                    {"id": "ren", "label": profiles["ren"].label, "status": "idle"},
-                    {"id": "ode", "label": profiles["ode"].label, "status": "idle"},
+                    {"id": "osc", "label": profiles["osc"].label, "status": "idle"},
+                    {"id": "qag", "label": profiles["qag"].label, "status": "idle"},
+                    {"id": "vp", "label": profiles["vp"].label, "status": "idle"},
+                    {"id": "president", "label": profiles["president"].label, "status": "idle"},
+                    {"id": "eb", "label": profiles["eb"].label, "status": "idle"},
                 ],
                 "edges": [
                     {"id": "gov-cd", "source": "gov_mof", "target": "cd", "label": "priorities"},
                     {"id": "gov2-cd", "source": "gov_moa", "target": "cd", "label": "priorities"},
                     {"id": "cdt-cd", "source": "cdt_econ", "target": "cd", "label": "technical review"},
                     {"id": "cdt2-cd", "source": "cdt_tech", "target": "cd", "label": "technical review"},
-                    {"id": "ren-cd", "source": "ren", "target": "cd", "label": "quality review"},
-                    {"id": "ode-cd", "source": "ode", "target": "cd", "label": "evaluation"},
+                    {"id": "cd-osc", "source": "cd", "target": "osc", "label": "OSC review"},
+                    {"id": "osc-qag", "source": "osc", "target": "qag", "label": "QAG desk review"},
+                    {"id": "qag-vp", "source": "qag", "target": "vp", "label": "endorsement"},
+                    {"id": "vp-president", "source": "vp", "target": "president", "label": "approval"},
+                    {"id": "president-eb", "source": "president", "target": "eb", "label": "consultation"},
                 ],
             },
         )
@@ -708,7 +857,24 @@ async def run_simulation(*, run_id: str, project: dict[str, Any]) -> None:
         run.status = "rendering"
         await _save_run_status(run)
         await _emit(run, "run_status", {"status": run.status, "round": run.round})
-        await _emit(run, "graph_update", {"node_status": {"cd": "idle", "ren": "idle", "ode": "idle"}})
+        await _emit(
+            run,
+            "graph_update",
+            {
+                "node_status": {
+                    "cd": "idle",
+                    "cdt_econ": "idle",
+                    "cdt_tech": "idle",
+                    "gov_mof": "idle",
+                    "gov_moa": "idle",
+                    "osc": "idle",
+                    "qag": "idle",
+                    "vp": "idle",
+                    "president": "idle",
+                    "eb": "idle",
+                }
+            },
+        )
 
         out_dir = SETTINGS.outputs_dir / run_id
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -738,13 +904,17 @@ async def run_simulation(*, run_id: str, project: dict[str, Any]) -> None:
             mem_dir = _run_dir(run_id) / "candidates" / top.candidate_id / "memory"
             if mem_dir.exists():
                 cd_mem_path = mem_dir / "cd.json"
-                ode_mem_path = mem_dir / "ode.json"
+                osc_mem_path = mem_dir / "osc.json"
+                qag_mem_path = mem_dir / "qag.json"
                 if cd_mem_path.exists():
                     await write_json(_run_dir(run_id) / "cd_memory.json", await read_json(cd_mem_path))
                     run.artifacts["cd_memory"] = str(_run_dir(run_id) / "cd_memory.json")
-                if ode_mem_path.exists():
-                    await write_json(_run_dir(run_id) / "ode_memory.json", await read_json(ode_mem_path))
-                    run.artifacts["ode_memory"] = str(_run_dir(run_id) / "ode_memory.json")
+                if osc_mem_path.exists():
+                    await write_json(_run_dir(run_id) / "osc_memory.json", await read_json(osc_mem_path))
+                    run.artifacts["osc_memory"] = str(_run_dir(run_id) / "osc_memory.json")
+                if qag_mem_path.exists():
+                    await write_json(_run_dir(run_id) / "qag_memory.json", await read_json(qag_mem_path))
+                    run.artifacts["qag_memory"] = str(_run_dir(run_id) / "qag_memory.json")
 
         run.status = "completed"
         await _save_run_status(run)

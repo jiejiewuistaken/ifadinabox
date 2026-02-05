@@ -99,6 +99,10 @@ class CandidateResult(BaseModel):
     review: ReviewResult
     ren_review: ReviewResult | None = None
     ode_review: ReviewResult | None = None
+    osc_review: ReviewResult | None = None
+    qag_review: ReviewResult | None = None
+    stage_gates: dict[str, bool] = Field(default_factory=dict)
+    stage_notes: dict[str, str] = Field(default_factory=dict)
     forecast: ForecastResult | None = None
     created_at: str = Field(default_factory=utcnow_iso)
 

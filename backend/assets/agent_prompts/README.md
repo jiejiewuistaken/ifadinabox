@@ -10,5 +10,8 @@ Naming convention:
 - cdt_tech.md
 - gov_mof.md
 - gov_moa.md
-- ren.md
-- ode.md
+- osc.md
+- qag.md
+- vp.md
+- president.md
+- eb.md

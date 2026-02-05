@@ -17,7 +17,7 @@ export function Checklist({
 }) {
   return (
     <div style={{ border: "1px solid rgba(0,0,0,0.15)", borderRadius: 8, padding: 12 }}>
-      <div style={{ fontWeight: 800, marginBottom: 10 }}>ODE review checklist (MVP)</div>
+      <div style={{ fontWeight: 800, marginBottom: 10 }}>QAG review checklist</div>
 
       <div style={{ display: "grid", gap: 10 }}>
         {checkboxes.map((c) => (
