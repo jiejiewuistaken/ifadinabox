@@ -19,6 +19,10 @@ class ProjectInputs(BaseModel):
     country: str | None = None
     title: str | None = None
     user_notes: str = ""
+    output_type: Literal["cosop", "pcn", "pdr"] = "cosop"
+    num_simulations: int = 1
+    max_rounds: int = 3
+    top_candidates: int = 5
 
 
 class RunCreateResponse(BaseModel):
@@ -51,6 +55,20 @@ class CheckboxStatus(BaseModel):
     evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class ReviewMetric(BaseModel):
+    id: Literal[
+        "strategic_consistency",
+        "country_priority_match",
+        "technical_feasibility",
+        "compliance_risk",
+        "innovation",
+    ]
+    label: str
+    score: float
+    rationale: str
+    evidence: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class ReviewComment(BaseModel):
     severity: Literal["blocker", "major", "minor"]
     section: str
@@ -62,6 +80,27 @@ class ReviewResult(BaseModel):
     passed: bool
     comments: list[ReviewComment]
     checkboxes: list[CheckboxStatus]
+    metrics: list[ReviewMetric] = Field(default_factory=list)
+
+
+class ForecastResult(BaseModel):
+    phase: Literal["on_track", "watchlist", "at_risk"]
+    confidence: float
+    rationale: str
+
+
+class CandidateResult(BaseModel):
+    candidate_id: str
+    score: float
+    passed: bool
+    round: int
+    draft_path: str
+    pdf_path: str | None = None
+    review: ReviewResult
+    ren_review: ReviewResult | None = None
+    ode_review: ReviewResult | None = None
+    forecast: ForecastResult | None = None
+    created_at: str = Field(default_factory=utcnow_iso)
 
 
 class RunStatus(BaseModel):
@@ -71,6 +110,9 @@ class RunStatus(BaseModel):
     round: int = 0
     max_rounds: int = 2
     error: str | None = None
-    artifacts: dict[str, str] = Field(default_factory=dict)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
     review: ReviewResult | None = None
+    candidates: list[CandidateResult] = Field(default_factory=list)
+    selected_candidates: list[str] = Field(default_factory=list)
+    forecast: ForecastResult | None = None
 

@@ -10,5 +10,6 @@ scipy==1.14.1
 joblib==1.4.2
 reportlab==4.2.5
 python-docx==1.1.2
+python-pptx==1.0.2
 huggingface-hub==0.27.1
 openai==1.59.7

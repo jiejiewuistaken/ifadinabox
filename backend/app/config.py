@@ -9,6 +9,8 @@ class Settings:
     data_dir: Path = Path(__file__).resolve().parents[1] / "data"
     internal_assets_dir: Path = Path(__file__).resolve().parents[1] / "assets"
     internal_materials_dir: Path = internal_assets_dir / "internal_materials"
+    agent_kb_dir: Path = internal_assets_dir / "agent_kb"
+    agent_prompts_dir: Path = internal_assets_dir / "agent_prompts"
 
     projects_dir: Path = data_dir / "projects"
     uploads_dir: Path = data_dir / "uploads"

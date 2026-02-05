@@ -106,6 +106,7 @@ class LocalTfidfVectorStore:
         *,
         top_k: int = 5,
         source_filter: VectorStoreSource | None = None,
+        scope_filter: set[str] | None = None,
     ) -> list[SearchHit]:
         if self._vectorizer is None or self._matrix is None or not self._chunks:
             self.load()
@@ -122,6 +123,11 @@ class LocalTfidfVectorStore:
             c = self._chunks[int(i)]
             if source_filter and c.get("source") != source_filter:
                 continue
+            if scope_filter:
+                meta = c.get("meta") or {}
+                scopes = set(meta.get("scopes") or ["public"])
+                if not scopes.intersection(scope_filter):
+                    continue
             hits.append(SearchHit(score=float(sims[int(i)]), chunk=c))
             if len(hits) >= top_k:
                 break

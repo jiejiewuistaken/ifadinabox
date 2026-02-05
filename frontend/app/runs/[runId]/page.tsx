@@ -135,7 +135,7 @@ export default function RunPage() {
       </div>
 
       <div style={{ marginTop: 12, opacity: 0.8, fontSize: 13 }}>
-        Tip: This MVP runs 1–2 rounds (CD writes, ODE reviews). When completed, open Preview to view the PDF + checklist.
+        Tip: This run may evaluate multiple candidates with multi-agent review. When completed, open Preview to view the PDF carousel and checklist.
       </div>
     </div>
   );
