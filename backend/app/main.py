@@ -38,6 +38,8 @@ async def _startup() -> None:
     SETTINGS.runs_dir.mkdir(parents=True, exist_ok=True)
     SETTINGS.vector_store_dir.mkdir(parents=True, exist_ok=True)
     SETTINGS.outputs_dir.mkdir(parents=True, exist_ok=True)
+    SETTINGS.agent_kb_dir.mkdir(parents=True, exist_ok=True)
+    SETTINGS.agent_prompts_dir.mkdir(parents=True, exist_ok=True)
 
 
 @app.post("/api/projects", response_model=ProjectCreateResponse)
@@ -101,12 +103,24 @@ async def get_run(run_id: str) -> dict:
 
 
 @app.get("/api/runs/{run_id}/pdf")
-async def get_run_pdf(run_id: str, disposition: str = "inline") -> FileResponse:
+async def get_run_pdf(run_id: str, disposition: str = "inline", candidate_id: str | None = None) -> FileResponse:
     run_path = SETTINGS.runs_dir / run_id / "run.json"
     if not run_path.exists():
         raise HTTPException(status_code=404, detail="Run not found")
     run = await read_json(run_path)
-    pdf_path = run.get("artifacts", {}).get("pdf")
+    artifacts = run.get("artifacts", {})
+    pdf_path: str | None = None
+    if candidate_id:
+        pdf_path = artifacts.get("candidate_pdfs", {}).get(candidate_id)
+        if not pdf_path:
+            raise HTTPException(status_code=404, detail="Candidate PDF not found")
+    else:
+        pdf_path = artifacts.get("pdf")
+        if not pdf_path:
+            # fallback: if multiple candidate PDFs exist, return the first
+            candidate_pdfs = artifacts.get("candidate_pdfs", {})
+            if candidate_pdfs:
+                pdf_path = next(iter(candidate_pdfs.values()))
     if not pdf_path:
         raise HTTPException(status_code=409, detail="PDF not ready")
     # IMPORTANT: for iframe preview we need inline disposition; for downloads use attachment.

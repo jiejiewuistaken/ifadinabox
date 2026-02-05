@@ -105,7 +105,7 @@ export default function Home() {
       </label>
 
       <label style={{ display: "grid", gap: 6, marginTop: 12 }}>
-        <div style={{ fontWeight: 600 }}>Upload documents (PDF / TXT / MD)</div>
+        <div style={{ fontWeight: 600 }}>Upload documents (PDF / DOCX / TXT / MD / PPTX)</div>
         <input
           type="file"
           multiple

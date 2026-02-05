@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
@@ -15,8 +16,40 @@ export default function PreviewPage() {
     refreshInterval: 1000,
   });
 
-  const pdfUrl = `${BACKEND_URL}/api/runs/${runId}/pdf?disposition=inline`;
-  const review = run?.review;
+  const candidateEntries = useMemo(() => {
+    const candidatePdfs = (run?.artifacts?.candidate_pdfs as Record<string, string> | undefined) ?? {};
+    const candidates = Array.isArray(run?.candidates) ? run.candidates : [];
+    const selectedIds = Array.isArray(run?.selected_candidates)
+      ? run.selected_candidates
+      : Object.keys(candidatePdfs);
+    const ids = selectedIds.length > 0 ? selectedIds : Object.keys(candidatePdfs);
+    if (ids.length === 0) return [];
+    return ids.map((id) => {
+      const cand = candidates.find((c: any) => c?.candidate_id === id);
+      return {
+        id,
+        score: typeof cand?.score === "number" ? cand.score : null,
+        review: cand?.review ?? null,
+        forecast: cand?.forecast ?? null,
+      };
+    });
+  }, [run?.artifacts?.candidate_pdfs, run?.candidates]);
+
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    setIdx(0);
+  }, [candidateEntries.length, runId]);
+
+  const activeCandidate = candidateEntries[idx] ?? null;
+  const candidateId = activeCandidate?.id ?? null;
+  const pdfUrl = candidateId
+    ? `${BACKEND_URL}/api/runs/${runId}/pdf?candidate_id=${candidateId}&disposition=inline`
+    : `${BACKEND_URL}/api/runs/${runId}/pdf?disposition=inline`;
+  const downloadUrl = candidateId
+    ? `${BACKEND_URL}/api/runs/${runId}/pdf?candidate_id=${candidateId}&disposition=attachment`
+    : `${BACKEND_URL}/api/runs/${runId}/pdf?disposition=attachment`;
+  const review = activeCandidate?.review ?? run?.review;
+  const forecast = activeCandidate?.forecast ?? run?.forecast;
 
   return (
     <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
@@ -33,7 +66,7 @@ export default function PreviewPage() {
             Back to Simulation
           </Link>
           <a
-            href={`${BACKEND_URL}/api/runs/${runId}/pdf?disposition=attachment`}
+            href={downloadUrl}
             style={{ padding: "8px 12px", border: "1px solid rgba(0,0,0,0.2)", borderRadius: 8 }}
             download="cosop.pdf"
           >
@@ -57,6 +90,37 @@ export default function PreviewPage() {
             minHeight: 640,
           }}
         >
+          {candidateEntries.length > 1 ? (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 12px",
+                borderBottom: "1px solid rgba(0,0,0,0.08)",
+                background: "rgba(0,0,0,0.02)",
+              }}
+            >
+              <button
+                onClick={() => setIdx((prev) => Math.max(0, prev - 1))}
+                disabled={idx === 0}
+                style={{ padding: "6px 10px" }}
+              >
+                Prev
+              </button>
+              <div style={{ fontSize: 13 }}>
+                Candidate {idx + 1} of {candidateEntries.length}
+                {activeCandidate?.score != null ? ` (score: ${activeCandidate.score.toFixed(2)})` : ""}
+              </div>
+              <button
+                onClick={() => setIdx((prev) => Math.min(candidateEntries.length - 1, prev + 1))}
+                disabled={idx >= candidateEntries.length - 1}
+                style={{ padding: "6px 10px" }}
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
           <iframe
             title="COSOP PDF preview"
             src={pdfUrl}
@@ -64,23 +128,48 @@ export default function PreviewPage() {
           />
         </div>
 
-        {review ? (
-          <Checklist checkboxes={review.checkboxes ?? []} comments={review.comments ?? []} />
-        ) : (
-          <div
-            style={{
-              border: "1px solid rgba(0,0,0,0.15)",
-              borderRadius: 8,
-              padding: 12,
-              height: "fit-content",
-            }}
-          >
-            <div style={{ fontWeight: 800 }}>ODE review</div>
-            <div style={{ marginTop: 6, opacity: 0.8 }}>
-              Review not ready yet. Current status: {run?.status ?? "loading"}.
+        <div style={{ display: "grid", gap: 12 }}>
+          {forecast ? (
+            <div
+              style={{
+                border: "1px solid rgba(0,0,0,0.15)",
+                borderRadius: 8,
+                padding: 12,
+              }}
+            >
+              <div style={{ fontWeight: 800 }}>Completion forecast</div>
+              <div style={{ marginTop: 6, fontSize: 13 }}>
+                Phase: <strong>{forecast.phase}</strong>
+              </div>
+              <div style={{ marginTop: 4, fontSize: 13 }}>
+                Confidence: {(forecast.confidence ?? 0).toFixed(2)}
+              </div>
+              {forecast.rationale ? (
+                <div style={{ marginTop: 6, opacity: 0.8, fontSize: 12 }}>
+                  {forecast.rationale}
+                </div>
+              ) : null}
             </div>
-          </div>
-        )}
+          ) : null}
+
+          {review ? (
+            <Checklist checkboxes={review.checkboxes ?? []} comments={review.comments ?? []} />
+          ) : (
+            <div
+              style={{
+                border: "1px solid rgba(0,0,0,0.15)",
+                borderRadius: 8,
+                padding: 12,
+                height: "fit-content",
+              }}
+            >
+              <div style={{ fontWeight: 800 }}>ODE review</div>
+              <div style={{ marginTop: 6, opacity: 0.8 }}>
+                Review not ready yet. Current status: {run?.status ?? "loading"}.
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

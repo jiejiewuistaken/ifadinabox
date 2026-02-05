@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from pypdf import PdfReader
 from docx import Document
+from pptx import Presentation
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,21 @@ def extract_text_from_file(path: Path) -> list[tuple[str, dict[str, Any]]]:
         return [(_normalize_text("\n\n".join(parts)), {})]
     if suffix in (".txt", ".md"):
         return [(_normalize_text(path.read_text(encoding="utf-8", errors="ignore")), {})]
+    if suffix == ".pptx":
+        pres = Presentation(str(path))
+        out: list[tuple[str, dict[str, Any]]] = []
+        for i, slide in enumerate(pres.slides):
+            parts: list[str] = []
+            for shape in slide.shapes:
+                text = ""
+                if hasattr(shape, "text"):
+                    text = shape.text or ""
+                elif hasattr(shape, "text_frame") and shape.text_frame:
+                    text = shape.text_frame.text or ""
+                if text:
+                    parts.append(text.strip())
+            out.append((_normalize_text("\n\n".join(parts)), {"page": i + 1}))
+        return out
     raise ValueError(f"Unsupported file type: {suffix}")
 
 
@@ -97,10 +113,13 @@ def chunk_text(
     return [x for x in final if x]
 
 
-def build_chunks_for_file(path: Path, *, source: str, doc_id: str | None = None) -> list[Chunk]:
+def build_chunks_for_file(
+    path: Path, *, source: str, doc_id: str | None = None, meta: dict[str, Any] | None = None
+) -> list[Chunk]:
     doc_id = doc_id or str(uuid4())
     segments = extract_text_from_file(path)
     filename = path.name
+    chunk_meta = meta or {}
     out: list[Chunk] = []
     for seg_text, seg_meta in segments:
         page = seg_meta.get("page")
@@ -113,7 +132,7 @@ def build_chunks_for_file(path: Path, *, source: str, doc_id: str | None = None)
                     filename=filename,
                     page=page,
                     text=t,
-                    meta={},
+                    meta=dict(chunk_meta),
                 )
             )
     return out
